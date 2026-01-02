@@ -1,3 +1,5 @@
 .catalyst.log
 build
 .cache
+GEMINI.md
+compile_commands.json
