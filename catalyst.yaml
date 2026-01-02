@@ -17,3 +17,7 @@ manifest:
     source:
       - src
     build: build
+dependencies:
+  - name: cli11
+    source: system
+    linkage: interface
