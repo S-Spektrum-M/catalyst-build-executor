@@ -1,8 +1,11 @@
 #include "cbe/builder.hpp"
+#include "cbe/executor.hpp"
 #include "cbe/parser.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <print>
 
 int main(const int argc, const char *const *argv) {
     catalyst::CBEBuilder builder;
@@ -13,26 +16,8 @@ int main(const int argc, const char *const *argv) {
         return 1;
     }
 
-    catalyst::BuildGraph graph = builder.emit_graph();
-
-    std::vector<size_t> order;
-
-    if (auto res = graph.topo_sort(); !res) {
-        std::cerr << "Error: " << res.error() << "\n";
-        return 1;
-    } else {
-        order = *res;
-    }
-
-    for (size_t id : order) {
-        const auto &node = graph.nodes()[id];
-        std::cout << "  " << node.path;
-        if (node.step_id.has_value()) {
-            const auto &step = graph.steps()[*node.step_id];
-            std::cout << "    (tool=" << step.tool << ")";
-        }
-        std::cout << "\n";
-    }
+    catalyst::Executor e{std::move(builder)};
+    auto _ = e.execute();
 
     return 0;
 }
