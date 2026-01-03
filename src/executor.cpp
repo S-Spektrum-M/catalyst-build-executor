@@ -2,10 +2,12 @@
 
 #include "cbe/builder.hpp"
 
-#include <algorithm>
+#include <condition_variable>
 #include <filesystem>
 #include <format>
+#include <mutex>
 #include <print>
+#include <queue>
 
 namespace catalyst {
 
@@ -17,13 +19,13 @@ Executor::Executor(CBEBuilder &&builder) : builder(std::move(builder)) {
 }
 
 Result<void> Executor::execute() {
+    pool.clear(); // Ensure clean state
+
     catalyst::BuildGraph build_graph = builder.emit_graph();
 
-    std::vector<size_t> build_order;
+    // Still use topo_sort to validate cycle-free graph
     if (auto res = build_graph.topo_sort(); !res) {
         return std::unexpected(res.error());
-    } else {
-        build_order = *res;
     }
 
     const auto &defs = builder.definitions();
@@ -40,7 +42,32 @@ Result<void> Executor::execute() {
     const std::string ldflags = get_def("ldflags");
     const std::string ldlibs = get_def("ldlibs");
 
-    for (size_t node_idx : build_order) {
+    // Build in-degrees
+    std::vector<int> in_degrees(build_graph.nodes().size(), 0);
+    for (const auto &node : build_graph.nodes()) {
+        for (size_t out : node.out_edges) {
+            in_degrees[out]++;
+        }
+    }
+
+    std::queue<size_t> ready_queue;
+    for (size_t i = 0; i < in_degrees.size(); ++i) {
+        if (in_degrees[i] == 0) {
+            ready_queue.push(i);
+        }
+    }
+
+    std::mutex mtx;
+    std::condition_variable cv_ready;
+    std::condition_variable cv_done;
+    size_t completed_count = 0;
+    size_t total_nodes = build_graph.nodes().size();
+
+    // If graph is empty
+    if (total_nodes == 0)
+        return {};
+
+    auto process_step = [&](size_t node_idx) {
         const auto &node = build_graph.nodes()[node_idx];
         if (node.step_id.has_value()) {
             const auto &step = build_graph.steps()[*node.step_id];
@@ -98,7 +125,63 @@ Result<void> Executor::execute() {
                 std::system(command_string.c_str());
             }
         }
+    };
+
+    auto worker = [&]() {
+        while (true) {
+            size_t node_idx;
+            {
+                std::unique_lock lock(mtx);
+                cv_ready.wait(lock, [&] { return !ready_queue.empty() || completed_count == total_nodes; });
+
+                if (ready_queue.empty()) {
+                    if (completed_count == total_nodes)
+                        return;
+                    continue;
+                }
+
+                node_idx = ready_queue.front();
+                ready_queue.pop();
+            }
+
+            process_step(node_idx);
+
+            {
+                std::lock_guard lock(mtx);
+                completed_count++;
+
+                const auto &node = build_graph.nodes()[node_idx];
+                for (size_t neighbor : node.out_edges) {
+                    in_degrees[neighbor]--;
+                    if (in_degrees[neighbor] == 0) {
+                        ready_queue.push(neighbor);
+                        cv_ready.notify_one();
+                    }
+                }
+
+                if (completed_count == total_nodes) {
+                    cv_done.notify_one();
+                    cv_ready.notify_all(); // Wake up other workers to exit
+                }
+            }
+        }
+    };
+
+    size_t thread_count = std::thread::hardware_concurrency();
+    if (thread_count == 0)
+        thread_count = 1;
+
+    for (size_t i = 0; i < thread_count; ++i) {
+        pool.emplace_back(worker);
     }
+
+    // Wait for completion
+    {
+        std::unique_lock lock(mtx);
+        cv_done.wait(lock, [&] { return completed_count == total_nodes; });
+    }
+
+    pool.clear(); // Join all threads
     return {};
 }
 
