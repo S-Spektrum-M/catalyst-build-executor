@@ -30,7 +30,14 @@ public:
             return;
         }
 
+        posix_fadvise(fd_, 0, 0, POSIX_FADV_SEQUENTIAL);
+
+#ifdef __linux__
+        void *addr = mmap(nullptr, size_, PROT_READ, MAP_POPULATE | MAP_PRIVATE, fd_, 0);
+#else
         void *addr = mmap(nullptr, size_, PROT_READ, MAP_PRIVATE, fd_, 0);
+#endif
+
         if (addr == MAP_FAILED) {
             close(fd_);
             throw std::runtime_error("Failed to mmap file: " + path.string());
