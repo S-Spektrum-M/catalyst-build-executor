@@ -1,6 +1,8 @@
 # CBE (Catalyst Build Executor)
 
-CBE is a high-speed, low-level build orchestrator designed as a machine-generated target for higher-level meta-build systems, focusing on performance and dependency tracking.
+[CBE](https://github.com/S-Spektrum-M/catalyst-build-executor) is a high-speed, low-level build orchestrator
+designed as a machine-generated target for higher-level meta-build systems, focusing on performance and
+dependency tracking.
 
 ## The `catalyst.build` Schema
 
