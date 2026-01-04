@@ -183,14 +183,15 @@ Result<void> Executor::execute() {
                     int ec = res->get();
                     if (ec != 0) {
                         std::println(stderr, "Build failed: {} -> {} (exit code {})", step.tool, step.output, ec);
-                        std::exit(ec);
+                        return ec;
                     }
                 } else {
                     std::println(stderr, "Failed to execute: {}", res.error());
-                    std::exit(1);
+                    return 1;
                 }
             }
         }
+        return 0;
     };
 
     auto worker = [&]() {
@@ -210,7 +211,9 @@ Result<void> Executor::execute() {
                 ready_queue.pop();
             }
 
-            process_step(node_idx);
+            if (auto res = process_step(node_idx); res != 0) {
+                std::exit(res);
+            }
 
             {
                 std::lock_guard lock(mtx);
