@@ -1,16 +1,11 @@
 #include "cbe/parser.hpp"
 
 #include "cbe/builder.hpp"
-#include "cbe/mmap.hpp" // Use our internal mmap header
+#include "cbe/mmap.hpp"
 #include "cbe/utility.hpp"
 
-#include <cctype>
-#include <iostream>
 #include <memory>
-#include <ranges>
-#include <stdexcept>
 #include <string_view>
-#include <vector>
 
 namespace catalyst {
 

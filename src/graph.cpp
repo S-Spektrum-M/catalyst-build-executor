@@ -5,7 +5,6 @@
 #include "cbe/utility.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>

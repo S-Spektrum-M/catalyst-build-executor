@@ -2,7 +2,6 @@
 #include "cbe/executor.hpp"
 #include "cbe/parser.hpp"
 
-#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <print>
