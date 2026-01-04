@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <format>
 #include <functional>
+#include <future>
 
 namespace fs = std::filesystem;
 
@@ -26,15 +27,15 @@ size_t BuildGraph::get_or_create_node(std::string_view path) {
     return id;
 }
 
-std::shared_ptr<MappedFile> parse_depfile(const std::filesystem::path &path, auto callback) {
+void parse_depfile(const std::filesystem::path &path, auto callback) {
     if (!fs::exists(path)) {
-        return nullptr;
+        return;
     }
-    auto map = std::make_shared<MappedFile>(path);
-    std::string_view content = map->content();
+    MappedFile map{path};
+    std::string_view content = map.content();
 
     if (content.empty())
-        return map;
+        return;
 
     const char *ptr = content.data();
     const char *end = ptr + content.size();
@@ -42,7 +43,7 @@ std::shared_ptr<MappedFile> parse_depfile(const std::filesystem::path &path, aut
     // 1. Skip to deps, ignoring final output
     const char *colon = static_cast<const char *>(std::memchr(ptr, ':', end - ptr));
     if (!colon)
-        return map;
+        return;
     ptr = colon + 1;
 
     // Main parsing loop
@@ -106,8 +107,6 @@ std::shared_ptr<MappedFile> parse_depfile(const std::filesystem::path &path, aut
             callback(std::string_view(start, ptr - start));
         }
     }
-
-    return map;
 }
 
 Result<size_t> BuildGraph::add_step(BuildStep step) {
@@ -130,9 +129,7 @@ Result<size_t> BuildGraph::add_step(BuildStep step) {
             step.depfile_inputs->emplace_back(fn);
         };
         const fs::path depfile_path = std::format("{}.d", step.output);
-        if (auto mmap = parse_depfile(depfile_path, depfile_parse_callback)) {
-            add_resource(mmap);
-        }
+        parse_depfile(depfile_path, depfile_parse_callback);
     } else if (step.tool == "ld" || step.tool == "sld" || step.tool == "ar") {
         // TODO: parse .rsp file
     }
