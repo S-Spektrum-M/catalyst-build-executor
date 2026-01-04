@@ -134,7 +134,7 @@ Result<void> Executor::execute() {
                 } else if (step.tool == "sld") {
                     command_string = std::format("{} -shared {} -o {}", cxx, inputs_str, step.output);
                 }
-                std::println("{}", command_string);
+                std::println("{} -> {}", step.tool, step.output);
                 std::system(command_string.c_str());
             }
         }
