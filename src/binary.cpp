@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
-#include <map>
 #include <memory>
 #include <string_view>
 #include <unordered_map>
@@ -82,6 +81,10 @@ Result<void> parse_bin(CBEBuilder &builder) {
     if (std::memcmp(header->magic, "CATBW001", 8) != 0) {
 #endif
         return std::unexpected("Invalid magic or version in .catalyst.bin");
+    }
+
+    if (header->strings_size > content.size() - sizeof(BinHeader)) {
+        return std::unexpected("Malformed .catalyst.bin: strings_size too large");
     }
 
     const char *ptr = content.data() + sizeof(BinHeader);
