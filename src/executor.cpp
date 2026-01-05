@@ -16,6 +16,7 @@
 #include <queue>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <sys/mman.h>
 #include <vector>
 
@@ -74,18 +75,7 @@ Result<void> Executor::emit_compdb() {
         if (step.tool != "cc" && step.tool != "cxx")
             continue;
 
-        std::vector<std::string> inputs;
-        std::string_view pending = step.inputs;
-        while (true) {
-            size_t pos = pending.find(',');
-            if (pos == std::string_view::npos) {
-                if (!pending.empty())
-                    inputs.emplace_back(pending);
-                break;
-            }
-            inputs.emplace_back(pending.substr(0, pos));
-            pending.remove_prefix(pos + 1);
-        }
+        const std::vector<std::string_view>& inputs = step.parsed_inputs;
 
         std::vector<std::string> args;
         auto add_parts = [&args](const auto &parts) {
@@ -99,15 +89,18 @@ Result<void> Executor::emit_compdb() {
         if (step.tool == "cc") {
             add_parts(cc_vec);
             add_parts(cflags_vec);
+            args.reserve(args.size() + inputs.size() + 7);
             args.insert(args.end(), {"-MMD", "-MF", std::string(step.output) + ".d", "-c"});
-            args.insert(args.end(), inputs.begin(), inputs.end());
+            for (const auto& in : inputs) args.emplace_back(in);
             args.push_back("-o");
             args.push_back(std::string(step.output));
         } else if (step.tool == "cxx") {
             add_parts(cxx_vec);
             add_parts(cxxflags_vec);
+            args.reserve(args.size() + inputs.size() + 7);
             args.insert(args.end(), {"-MMD", "-MF", std::string(step.output) + ".d", "-c"});
-            args.insert(args.end(), inputs.begin(), inputs.end());
+            args.reserve(args.size() + inputs.size());
+            for (const auto& in : inputs) args.emplace_back(in);
             args.push_back("-o");
             args.push_back(std::string(step.output));
         }
@@ -184,28 +177,8 @@ Result<void> Executor::execute() {
         const auto &node = build_graph.nodes()[node_idx];
         if (node.step_id.has_value()) {
             const auto &step = build_graph.steps()[*node.step_id];
+            const auto &inputs = step.parsed_inputs;
 
-            std::vector<std::string> inputs;
-            std::string_view pending = step.inputs;
-            while (true) {
-                size_t pos = pending.find(',');
-                if (pos == std::string_view::npos) {
-                    if (!pending.empty())
-                        inputs.emplace_back(pending);
-                    break;
-                }
-                inputs.emplace_back(pending.substr(0, pos));
-                pending.remove_prefix(pos + 1);
-            }
-
-            std::string inputs_str;
-            for (const auto &input : inputs) {
-                if (!inputs_str.empty())
-                    inputs_str += " ";
-                inputs_str += input;
-            }
-
-            std::string command_string;
             bool needs_rebuild = false;
 
             if (std::filesystem::exists(step.output)) {
@@ -249,14 +222,14 @@ Result<void> Executor::execute() {
                     add_parts(cc_vec);
                     add_parts(cflags_vec);
                     args.insert(args.end(), {"-MMD", "-MF", std::string(step.output) + ".d", "-c"});
-                    args.insert(args.end(), inputs.begin(), inputs.end());
+                    for(const auto& in : inputs) args.emplace_back(in);
                     args.push_back("-o");
                     args.push_back(std::string(step.output));
                 } else if (step.tool == "cxx") {
                     add_parts(cxx_vec);
                     add_parts(cxxflags_vec);
                     args.insert(args.end(), {"-MMD", "-MF", std::string(step.output) + ".d", "-c"});
-                    args.insert(args.end(), inputs.begin(), inputs.end());
+                    for(const auto& in : inputs) args.emplace_back(in);
                     args.push_back("-o");
                     args.push_back(std::string(step.output));
                 } else if (step.tool == "ld") {
@@ -270,7 +243,7 @@ Result<void> Executor::execute() {
                         }
                         args.push_back(std::string("@") + rsp_cleanup_path.string());
                     } else {
-                        args.insert(args.end(), inputs.begin(), inputs.end());
+                        for(const auto& in : inputs) args.emplace_back(in);
                     }
                     args.push_back("-o");
                     args.push_back(std::string(step.output));
@@ -278,11 +251,11 @@ Result<void> Executor::execute() {
                     add_parts(ldlibs_vec);
                 } else if (step.tool == "ar") {
                     args.insert(args.end(), {"ar", "rcs", std::string(step.output)});
-                    args.insert(args.end(), inputs.begin(), inputs.end());
+                    for(const auto& in : inputs) args.emplace_back(in);
                 } else if (step.tool == "sld") {
                     add_parts(cxx_vec);
                     args.push_back("-shared");
-                    args.insert(args.end(), inputs.begin(), inputs.end());
+                    for(const auto& in : inputs) args.emplace_back(in);
                     args.push_back("-o");
                     args.push_back(std::string(step.output));
                 }

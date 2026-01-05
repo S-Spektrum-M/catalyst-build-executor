@@ -117,6 +117,25 @@ Result<size_t> BuildGraph::add_step(BuildStep step) {
         return std::unexpected(std::format("Duplicate producer for output: {}", step.output));
     }
 
+    // Populate parsed_inputs
+    std::string_view remaining = step.inputs;
+    // PERF: posibily faster to do with memchr
+    while (!remaining.empty()) {
+        size_t comma_pos = remaining.find(',');
+        std::string_view in_path;
+        if (comma_pos == std::string_view::npos) {
+            in_path = remaining;
+            remaining = {};
+        } else {
+            in_path = remaining.substr(0, comma_pos);
+            remaining = remaining.substr(comma_pos + 1);
+        }
+
+        if (!in_path.empty()) {
+            step.parsed_inputs.push_back(in_path);
+        }
+    }
+
     size_t step_id = steps_.size();
     steps_.push_back(step); // Store the step
     nodes_[out_id].step_id = step_id;
@@ -135,23 +154,10 @@ Result<size_t> BuildGraph::add_step(BuildStep step) {
         // TODO: parse .rsp file
     }
 
-    // Iterate over comma-separated inputs
-    std::string_view remaining = step.inputs;
-    while (!remaining.empty()) {
-        size_t comma_pos = remaining.find(',');
-        std::string_view in_path;
-        if (comma_pos == std::string_view::npos) {
-            in_path = remaining;
-            remaining = {};
-        } else {
-            in_path = remaining.substr(0, comma_pos);
-            remaining = remaining.substr(comma_pos + 1);
-        }
-
-        if (!in_path.empty()) {
-            size_t in_id = get_or_create_node(in_path);
-            nodes_[in_id].out_edges.push_back(out_id);
-        }
+    // Iterate over parsed_inputs to add edges
+    for (const auto &in_path : step.parsed_inputs) {
+        size_t in_id = get_or_create_node(in_path);
+        nodes_[in_id].out_edges.push_back(out_id);
     }
 
     return step_id;
