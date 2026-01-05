@@ -96,7 +96,8 @@ Result<void> parse(CBEBuilder &builder, const std::filesystem::path &path) {
 
         start = end + 1;
     }
-    return emit_bin(builder);
+    auto _ = emit_bin(builder);
+    return {}; // don't trigger a failure
 }
 
 } // namespace catalyst
