@@ -2,21 +2,33 @@
 #include "cbe/executor.hpp"
 #include "cbe/parser.hpp"
 
+#include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <print>
 
 int main(const int argc, const char *const *argv) {
+
     catalyst::CBEBuilder builder;
     std::filesystem::path input_path = "catalyst.build";
+
+    if (std::filesystem::is_symlink("catalyst.build")) {
+        // FIXME: figure out __how__ to support.
+        std::println(std::cerr, "cbe does not support parsing symbolically linked files.");
+        return 1;
+    }
 
     if (auto res = catalyst::parse(builder, input_path); !res) {
         std::println(std::cerr, "Failed to parse: {}", res.error());
         return 1;
     }
 
-    catalyst::Executor e{std::move(builder)};
-    auto _ = e.execute();
+    catalyst::Executor executor{std::move(builder)};
+    if (argc > 1 && strcmp(argv[1], "COMPDB") == 0) {
+        auto _ = executor.emit_compdb();
+    } else {
+        auto _ = executor.execute();
+    }
 
     return 0;
 }

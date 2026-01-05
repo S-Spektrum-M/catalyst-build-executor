@@ -2,11 +2,14 @@
 
 #include "cbe/builder.hpp"
 #include "cbe/process_exec.hpp"
+#include "cbe/utility.hpp"
 
 #include <condition_variable>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <mutex>
+#include <nlohmann/json.hpp>
 #include <print>
 #include <queue>
 #include <ranges>
@@ -26,6 +29,101 @@ bool file_changed(const std::filesystem::path &input_file, const auto &out_mod_t
 Executor::Executor(CBEBuilder &&builder) : builder(std::move(builder)) {
 }
 
+Result<void> Executor::emit_compdb() {
+    catalyst::BuildGraph build_graph = builder.emit_graph();
+    std::vector<size_t> order;
+    if (auto res = build_graph.topo_sort(); !res)
+        return std::unexpected(res.error());
+    else
+        order = *res;
+
+    const auto &defs = builder.definitions();
+    auto get_def = [&](std::string_view key) -> std::string {
+        if (auto it = defs.find(key); it != defs.end())
+            return std::string(it->second);
+        return "";
+    };
+
+    // This __must__ be done otherwise optimizations will fuck up.
+    const std::string cc = get_def("cc");
+    const std::string cxx = get_def("cxx");
+    const std::string cxxflags = get_def("cxxflags");
+    const std::string cflags = get_def("cflags");
+    const std::string ldflags = get_def("ldflags");
+    const std::string ldlibs = get_def("ldlibs");
+
+    const std::vector cc_vec = std::ranges::views::split(cc, ' ') | std::ranges::to<std::vector>();
+    const std::vector cxx_vec = std::ranges::views::lazy_split(cxx, ' ') | std::ranges::to<std::vector>();
+    const std::vector cflags_vec = std::ranges::views::split(cflags, ' ') | std::ranges::to<std::vector>();
+    const std::vector cxxflags_vec = std::ranges::views::split(cxxflags, ' ') | std::ranges::to<std::vector>();
+
+    using json = nlohmann::json;
+    json compdb = json::array();
+    auto cwd = std::filesystem::current_path().string();
+
+    for (size_t node_idx : order) {
+        const auto &node = build_graph.nodes()[node_idx];
+        if (!node.step_id.has_value())
+            continue;
+        const auto &step = build_graph.steps()[*node.step_id];
+
+        // Only emit for compilation steps
+        if (step.tool != "cc" && step.tool != "cxx")
+            continue;
+
+        std::vector<std::string> inputs;
+        std::string_view pending = step.inputs;
+        while (true) {
+            size_t pos = pending.find(',');
+            if (pos == std::string_view::npos) {
+                if (!pending.empty())
+                    inputs.emplace_back(pending);
+                break;
+            }
+            inputs.emplace_back(pending.substr(0, pos));
+            pending.remove_prefix(pos + 1);
+        }
+
+        std::vector<std::string> args;
+        auto add_parts = [&args](const auto &parts) {
+            for (const auto &part : parts) {
+                if (part.begin() != part.end()) {
+                    args.push_back(std::ranges::to<std::string>(part));
+                }
+            }
+        };
+
+        if (step.tool == "cc") {
+            add_parts(cc_vec);
+            add_parts(cflags_vec);
+            args.insert(args.end(), {"-MMD", "-MF", std::string(step.output) + ".d", "-c"});
+            args.insert(args.end(), inputs.begin(), inputs.end());
+            args.push_back("-o");
+            args.push_back(std::string(step.output));
+        } else if (step.tool == "cxx") {
+            add_parts(cxx_vec);
+            add_parts(cxxflags_vec);
+            args.insert(args.end(), {"-MMD", "-MF", std::string(step.output) + ".d", "-c"});
+            args.insert(args.end(), inputs.begin(), inputs.end());
+            args.push_back("-o");
+            args.push_back(std::string(step.output));
+        }
+
+        json entry;
+        entry["directory"] = cwd;
+        entry["arguments"] = args;
+        if (!inputs.empty()) {
+            entry["file"] = inputs[0];
+        }
+        entry["output"] = step.output;
+        compdb.push_back(entry);
+    }
+
+    std::ofstream f("compile_commands.json");
+    f << compdb.dump(4);
+    return {};
+}
+
 Result<void> Executor::execute() {
     pool.clear(); // Ensure clean state
 
@@ -43,6 +141,7 @@ Result<void> Executor::execute() {
         return "";
     };
 
+    // This __must__ be done otherwise optimizations will fuck up.
     const std::string cc = get_def("cc");
     const std::string cxx = get_def("cxx");
     const std::string cxxflags = get_def("cxxflags");

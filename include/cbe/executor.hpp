@@ -11,6 +11,7 @@ class Executor {
 public:
     Executor(CBEBuilder &&builder);
     Result<void> execute();
+    Result<void> emit_compdb();
 
 private:
     CBEBuilder builder;
