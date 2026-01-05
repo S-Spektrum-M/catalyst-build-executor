@@ -12,6 +12,10 @@ int main(const int argc, const char *const *argv) {
     catalyst::CBEBuilder builder;
     std::filesystem::path input_path = "catalyst.build";
 
+    if (!std::filesystem::exists("catalyst.build")) {
+        std::println(std::cerr, "Build File: catalyst.build does not exist.\n");
+        return 1;
+    }
     if (std::filesystem::is_symlink("catalyst.build")) {
         // FIXME: figure out __how__ to support.
         std::println(std::cerr, "cbe does not support parsing symbolically linked files.");
