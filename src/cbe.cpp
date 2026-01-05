@@ -31,7 +31,10 @@ int main(const int argc, const char *const *argv) {
     if (argc > 1 && strcmp(argv[1], "COMPDB") == 0) {
         auto _ = executor.emit_compdb();
     } else {
-        auto _ = executor.execute();
+        if (auto res = executor.execute(); !res) {
+            std::println(std::cerr, "Execution failed: {}", res.error());
+            return 1;
+        }
     }
 
     return 0;

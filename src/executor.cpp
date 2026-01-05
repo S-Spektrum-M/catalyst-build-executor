@@ -132,11 +132,6 @@ Result<void> Executor::execute() {
 
     catalyst::BuildGraph build_graph = builder.emit_graph();
 
-    // Still use topo_sort to validate cycle-free graph
-    if (auto res = build_graph.topo_sort(); !res) {
-        return std::unexpected(res.error());
-    }
-
     const auto &defs = builder.definitions();
     auto get_def = [&](std::string_view key) -> std::string {
         if (auto it = defs.find(key); it != defs.end())
@@ -176,9 +171,10 @@ Result<void> Executor::execute() {
 
     std::mutex mtx;
     std::condition_variable cv_ready;
-    std::condition_variable cv_done;
     size_t completed_count = 0;
     size_t total_nodes = build_graph.nodes().size();
+    bool error_occurred = false;
+    size_t active_workers = 0;
 
     // If graph is empty
     if (total_nodes == 0)
@@ -318,39 +314,42 @@ Result<void> Executor::execute() {
             size_t node_idx;
             {
                 std::unique_lock lock(mtx);
-                cv_ready.wait(lock, [&] { return !ready_queue.empty() || completed_count == total_nodes; });
+                cv_ready.wait(lock, [&] {
+                    return !ready_queue.empty() || completed_count == total_nodes || active_workers == 0; //
+                });
 
                 if (ready_queue.empty()) {
                     if (completed_count == total_nodes)
                         return;
-                    continue;
+                    // If queue is empty and no active workers, but work not done -> Cycle
+                    return;
                 }
 
                 node_idx = ready_queue.front();
                 ready_queue.pop();
+                active_workers++;
             }
 
-            if (auto res = process_step(node_idx); res != 0) {
-                std::exit(res);
-            }
+            int result = process_step(node_idx);
 
             {
                 std::lock_guard lock(mtx);
-                completed_count++;
+                active_workers--;
 
-                const auto &node = build_graph.nodes()[node_idx];
-                for (size_t neighbor : node.out_edges) {
-                    in_degrees[neighbor]--;
-                    if (in_degrees[neighbor] == 0) {
-                        ready_queue.push(neighbor);
-                        cv_ready.notify_one();
+                if (result != 0) {
+                    error_occurred = true;
+                    completed_count = total_nodes; // Force exit
+                } else {
+                    completed_count++;
+                    const auto &node = build_graph.nodes()[node_idx];
+                    for (size_t neighbor : node.out_edges) {
+                        in_degrees[neighbor]--;
+                        if (in_degrees[neighbor] == 0) {
+                            ready_queue.push(neighbor);
+                        }
                     }
                 }
-
-                if (completed_count == total_nodes) {
-                    cv_done.notify_one();
-                    cv_ready.notify_all(); // Wake up other workers to exit
-                }
+                cv_ready.notify_all();
             }
         }
     };
@@ -363,13 +362,14 @@ Result<void> Executor::execute() {
         pool.emplace_back(worker);
     }
 
-    // Wait for completion
-    {
-        std::unique_lock lock(mtx);
-        cv_done.wait(lock, [&] { return completed_count == total_nodes; });
-    }
-
     pool.clear(); // Join all threads
+
+    if (error_occurred)
+        return std::unexpected("Build Failed");
+
+    if (completed_count != total_nodes)
+        return std::unexpected("Cycle detected: Build stalled with pending nodes.");
+
     return {};
 }
 
