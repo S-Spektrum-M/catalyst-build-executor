@@ -5,6 +5,7 @@
 #include "cbe/utility.hpp"
 
 #include <condition_variable>
+#include <cstddef>
 #include <cstdio>
 #include <filesystem>
 #include <format>
@@ -18,6 +19,7 @@
 #include <string>
 #include <string_view>
 #include <sys/mman.h>
+#include <thread>
 #include <vector>
 
 namespace catalyst {
@@ -30,7 +32,30 @@ bool file_changed(const std::filesystem::path &input_file, const auto &out_mod_t
     return in_time >= out_mod_time;
 }
 
-Executor::Executor(CBEBuilder &&builder) : builder(std::move(builder)) {
+Executor::Executor(CBEBuilder &&builder, ExecutorConfig config) : builder(std::move(builder)), config(config) {
+}
+
+Result<void> Executor::clean() {
+    catalyst::BuildGraph build_graph = builder.emit_graph();
+    std::println("Cleaning build artifacts...");
+
+    for (const auto &step : build_graph.steps()) {
+        if (std::filesystem::exists(step.output)) {
+            std::error_code ec;
+            std::filesystem::remove(step.output, ec);
+            if (ec) {
+                std::println(stderr, "Failed to remove {}: {}", step.output, ec.message());
+            } else {
+                std::println("Removed {}", step.output);
+            }
+        }
+        // Also clean .d files if they exist
+        auto d_file = std::string(step.output) + ".d";
+        if (std::filesystem::exists(d_file)) {
+            std::filesystem::remove(d_file);
+        }
+    }
+    return {};
 }
 
 Result<void> Executor::emit_compdb() {
@@ -189,7 +214,7 @@ Result<void> Executor::execute() {
             if (std::filesystem::exists(step.output)) {
                 auto output_modtime = std::filesystem::last_write_time(step.output);
 
-                if (file_changed("catalyst.build", output_modtime)) {
+                if (file_changed(config.build_file, output_modtime)) {
                     needs_rebuild = true;
                 }
 
@@ -215,7 +240,15 @@ Result<void> Executor::execute() {
             }
 
             if (needs_rebuild) {
-                std::println("{} -> {}", step.tool, step.output);
+                if (config.dry_run) {
+                    std::println("[DRY RUN] {} -> {}", step.tool, step.output);
+                    return 0; // Simulate success
+                }
+
+                {
+                    std::lock_guard lock(mtx);
+                    std::println("{} -> {}", step.tool, step.output);
+                }
 
                 static constexpr auto ARGS_VEC_INIT_SZ = 40;
                 std::vector<std::string> args;
@@ -344,7 +377,9 @@ Result<void> Executor::execute() {
         }
     };
 
-    size_t thread_count = std::thread::hardware_concurrency();
+    size_t thread_count = config.jobs;
+    if (thread_count == 0)
+        thread_count = std::thread::hardware_concurrency();
     if (thread_count == 0)
         thread_count = 1;
 
