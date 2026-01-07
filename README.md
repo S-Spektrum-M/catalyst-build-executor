@@ -29,8 +29,6 @@ Format: `<step_type>|<input_list>|<output_file>`
 *   `input_list`: Comma-separated files (e.g., `src/main.cpp,src/util.cpp`).
 *   `output_file`: The generated file.
 
-Note: Future support for `.rsp` (response files) is planned for handling long input lists.
-
 ### Toolchain Mapping & Dependencies
 
 CBE manages dependency tracking (`.d` files) automatically.
@@ -58,3 +56,20 @@ cxx|src/main.cpp|build/main.o
 cxx|src/net.cpp|build/net.o
 ld|build/main.o,build/net.o|build/app
 ```
+
+## Usage
+
+```bash
+cbe [options]
+```
+
+### Options
+
+*   `-h, --help`: Show help message.
+*   `-v, --version`: Show version.
+*   `-d <dir>`: Change working directory before execution.
+*   `-f <file>`: Use a custom build manifest (default: `catalyst.build`).
+*   `-j <N>`: Set the number of parallel jobs (default: auto-detected based on hardware).
+*   `--dry-run`: Print commands without executing them.
+*   `--clean`: Remove all generated build artifacts.
+*   `--compdb`: Generate a `compile_commands.json` file for clangd/LSP integration.
