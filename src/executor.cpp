@@ -11,9 +11,11 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <nlohmann/json.hpp>
+#include <ostream>
 #include <print>
 #include <queue>
 #include <ranges>
@@ -199,6 +201,14 @@ Result<void> Executor::execute() {
     size_t total_nodes = build_graph.nodes().size();
     bool error_occurred = false;
     size_t active_workers = 0;
+#ifdef _WIN32
+    std::ofstream tty("CON");
+#elifdef _WIN64
+    std::ofstream tty("CON");
+#elifdef __linux__
+    std::ofstream tty("/dev/tty");
+#endif
+    std::mutex cout_tty_mtx;
 
     // If graph is empty
     if (total_nodes == 0)
@@ -241,16 +251,20 @@ Result<void> Executor::execute() {
             }
 
             if (needs_rebuild) {
-                if (config.dry_run) {
-                    std::println("\033[1m[DRY RUN]\033[0m \033[1;32m{}\033[0m\t->\t{}", step.tool, step.output);
-                    return 0; // Simulate success
+                {
+                    std::lock_guard lock(cout_tty_mtx);
+                    tty << "\033[1m" << std::flush;
+                    if (config.dry_run)
+                        std::cout << "[DRY RUN] " << std::flush;
+                    else
+                        std::cout << "[" << completed_count + 1 << "/" << total_nodes << "] " << std::flush;
+                    tty << "\033[0m\033[1;32m" << std::flush;
+                    std::cout << std::setw(3) << step.tool << std::flush;
+                    tty << "\033[0m\033[0m" << std::flush;
+                    std::cout << " -> " << step.output << std::endl;
+                    if (config.dry_run)
+                        return 0;
                 }
-
-                std::println("\033[1m[{}/{}]\033[0m \033[1;32m{}\033[0m\t-> {}",
-                             completed_count + 1,
-                             total_nodes,
-                             step.tool,
-                             step.output);
 
                 static constexpr auto ARGS_VEC_INIT_SZ = 40;
                 std::vector<std::string> args;
