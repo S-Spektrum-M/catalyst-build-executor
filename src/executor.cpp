@@ -27,12 +27,23 @@
 
 namespace catalyst {
 
-bool file_changed(const std::filesystem::path &input_file, const auto &out_mod_time) {
+bool file_changed_since(const std::filesystem::path &input_file, const auto &out_mod_time) {
     std::error_code ec;
     auto in_time = std::filesystem::last_write_time(input_file, ec);
     if (ec)
         return true;
     return in_time >= out_mod_time;
+}
+
+bool is_newer(const std::filesystem::path &new_file, const std::filesystem::path &old_file) {
+    std::error_code ec;
+    auto new_time = std::filesystem::last_write_time(new_file, ec);
+    if (ec)
+        return true;
+    auto old_time = std::filesystem::last_write_time(old_file, ec);
+    if (ec)
+        return true;
+    return new_time > old_time;
 }
 
 Executor::Executor(CBEBuilder &&builder, ExecutorConfig config) : builder(std::move(builder)), config(config) {
@@ -225,14 +236,14 @@ Result<void> Executor::execute() {
             if (std::filesystem::exists(step.output)) {
                 auto output_modtime = std::filesystem::last_write_time(step.output);
 
-                if (file_changed(config.build_file, output_modtime)) {
+                if (file_changed_since(config.build_file, output_modtime)) {
                     needs_rebuild = true;
                 }
 
                 if (!needs_rebuild) {
                     if (step.depfile_inputs.has_value()) {
                         for (const auto &dep : *step.depfile_inputs) {
-                            if (file_changed(std::filesystem::path(dep), output_modtime)) {
+                            if (file_changed_since(std::filesystem::path(dep), output_modtime)) {
                                 needs_rebuild = true;
                                 break;
                             }
@@ -240,7 +251,7 @@ Result<void> Executor::execute() {
                     }
                     // this is our way of making sure that the .d file isn't stale
                     for (const auto &input : inputs) {
-                        if (file_changed(input, output_modtime)) {
+                        if (file_changed_since(input, output_modtime)) {
                             needs_rebuild = true;
                             break;
                         }
@@ -300,9 +311,13 @@ Result<void> Executor::execute() {
                     constexpr auto INPUT_SZ = 50;
                     if (inputs.size() > INPUT_SZ) {
                         rsp_cleanup_path = std::filesystem::path(step.output).replace_extension(".rsp");
-                        std::ofstream rsp_file(rsp_cleanup_path);
-                        for (const auto &input : inputs) {
-                            rsp_file << input << '\n';
+                        if (std::filesystem::exists(rsp_cleanup_path) && is_newer(rsp_cleanup_path, config.build_file)) {
+                            // skip
+                        } else {
+                            std::ofstream rsp_file(rsp_cleanup_path);
+                            for (const auto &input : inputs) {
+                                rsp_file << input << '\n';
+                            }
                         }
                         args.push_back(std::string("@") + rsp_cleanup_path.string());
                     } else {
@@ -327,11 +342,6 @@ Result<void> Executor::execute() {
                 }
 
                 auto res = catalyst::process_exec(std::move(args));
-
-                if (!rsp_cleanup_path.empty()) {
-                    std::error_code ec;
-                    std::filesystem::remove(rsp_cleanup_path, ec);
-                }
 
                 if (res) {
                     int ec = *res;
