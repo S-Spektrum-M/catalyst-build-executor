@@ -59,7 +59,8 @@ Result<void> Executor::emit_compdb() {
     const std::vector cc_vec = std::ranges::views::split(cc, ' ') | std::ranges::to<std::vector<std::string>>();
     const std::vector cxx_vec = std::ranges::views::split(cxx, ' ') | std::ranges::to<std::vector<std::string>>();
     const std::vector cflags_vec = std::ranges::views::split(cflags, ' ') | std::ranges::to<std::vector<std::string>>();
-    const std::vector cxxflags_vec = std::ranges::views::split(cxxflags, ' ') | std::ranges::to<std::vector<std::string>>();
+    const std::vector cxxflags_vec =
+        std::ranges::views::split(cxxflags, ' ') | std::ranges::to<std::vector<std::string>>();
 
     using json = nlohmann::json;
     json compdb = json::array();
@@ -75,7 +76,7 @@ Result<void> Executor::emit_compdb() {
         if (step.tool != "cc" && step.tool != "cxx")
             continue;
 
-        const std::vector<std::string_view>& inputs = step.parsed_inputs;
+        const std::vector<std::string_view> &inputs = step.parsed_inputs;
 
         std::vector<std::string> args;
         auto add_parts = [&args](const auto &parts) {
@@ -91,7 +92,8 @@ Result<void> Executor::emit_compdb() {
             add_parts(cflags_vec);
             args.reserve(args.size() + inputs.size() + 7);
             args.insert(args.end(), {"-MMD", "-MF", std::string(step.output) + ".d", "-c"});
-            for (const auto& in : inputs) args.emplace_back(in);
+            for (const auto &in : inputs)
+                args.emplace_back(in);
             args.push_back("-o");
             args.push_back(std::string(step.output));
         } else if (step.tool == "cxx") {
@@ -100,7 +102,8 @@ Result<void> Executor::emit_compdb() {
             args.reserve(args.size() + inputs.size() + 7);
             args.insert(args.end(), {"-MMD", "-MF", std::string(step.output) + ".d", "-c"});
             args.reserve(args.size() + inputs.size());
-            for (const auto& in : inputs) args.emplace_back(in);
+            for (const auto &in : inputs)
+                args.emplace_back(in);
             args.push_back("-o");
             args.push_back(std::string(step.output));
         }
@@ -143,8 +146,10 @@ Result<void> Executor::execute() {
     const std::vector cc_vec = std::ranges::views::split(cc, ' ') | std::ranges::to<std::vector<std::string>>();
     const std::vector cxx_vec = std::ranges::views::split(cxx, ' ') | std::ranges::to<std::vector<std::string>>();
     const std::vector cflags_vec = std::ranges::views::split(cflags, ' ') | std::ranges::to<std::vector<std::string>>();
-    const std::vector cxxflags_vec = std::ranges::views::split(cxxflags, ' ') | std::ranges::to<std::vector<std::string>>();
-    const std::vector ldflags_vec = std::ranges::views::split(ldflags, ' ') | std::ranges::to<std::vector<std::string>>();
+    const std::vector cxxflags_vec =
+        std::ranges::views::split(cxxflags, ' ') | std::ranges::to<std::vector<std::string>>();
+    const std::vector ldflags_vec =
+        std::ranges::views::split(ldflags, ' ') | std::ranges::to<std::vector<std::string>>();
     const std::vector ldlibs_vec = std::ranges::views::split(ldlibs, ' ') | std::ranges::to<std::vector<std::string>>();
 
     // Build in-degrees
@@ -222,14 +227,16 @@ Result<void> Executor::execute() {
                     add_parts(cc_vec);
                     add_parts(cflags_vec);
                     args.insert(args.end(), {"-MMD", "-MF", std::string(step.output) + ".d", "-c"});
-                    for(const auto& in : inputs) args.emplace_back(in);
+                    for (const auto &in : inputs)
+                        args.emplace_back(in);
                     args.push_back("-o");
                     args.push_back(std::string(step.output));
                 } else if (step.tool == "cxx") {
                     add_parts(cxx_vec);
                     add_parts(cxxflags_vec);
                     args.insert(args.end(), {"-MMD", "-MF", std::string(step.output) + ".d", "-c"});
-                    for(const auto& in : inputs) args.emplace_back(in);
+                    for (const auto &in : inputs)
+                        args.emplace_back(in);
                     args.push_back("-o");
                     args.push_back(std::string(step.output));
                 } else if (step.tool == "ld") {
@@ -243,7 +250,8 @@ Result<void> Executor::execute() {
                         }
                         args.push_back(std::string("@") + rsp_cleanup_path.string());
                     } else {
-                        for(const auto& in : inputs) args.emplace_back(in);
+                        for (const auto &in : inputs)
+                            args.emplace_back(in);
                     }
                     args.push_back("-o");
                     args.push_back(std::string(step.output));
@@ -251,11 +259,13 @@ Result<void> Executor::execute() {
                     add_parts(ldlibs_vec);
                 } else if (step.tool == "ar") {
                     args.insert(args.end(), {"ar", "rcs", std::string(step.output)});
-                    for(const auto& in : inputs) args.emplace_back(in);
+                    for (const auto &in : inputs)
+                        args.emplace_back(in);
                 } else if (step.tool == "sld") {
                     add_parts(cxx_vec);
                     args.push_back("-shared");
-                    for(const auto& in : inputs) args.emplace_back(in);
+                    for (const auto &in : inputs)
+                        args.emplace_back(in);
                     args.push_back("-o");
                     args.push_back(std::string(step.output));
                 }

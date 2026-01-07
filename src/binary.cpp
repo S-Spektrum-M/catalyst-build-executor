@@ -162,8 +162,11 @@ Result<void> parse_bin(CBEBuilder &builder) {
             }
         }
 
-        builder.graph_.steps_.push_back(
-            {get_sv(tool_ref), get_sv(inputs_ref), get_sv(output_ref), std::move(depfile_inputs), std::move(parsed_inputs)});
+        builder.graph_.steps_.push_back({get_sv(tool_ref),
+                                         get_sv(inputs_ref),
+                                         get_sv(output_ref),
+                                         std::move(depfile_inputs),
+                                         std::move(parsed_inputs)});
     }
 
     builder.add_resource(file);

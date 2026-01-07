@@ -21,8 +21,8 @@ class MappedFile {
 public:
     explicit MappedFile(const std::filesystem::path &path) {
 #ifdef _WIN32
-        file_handle_ = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                                   FILE_ATTRIBUTE_NORMAL, nullptr);
+        file_handle_ = CreateFileW(
+            path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 
         if (file_handle_ == INVALID_HANDLE_VALUE) {
             throw std::runtime_error("Failed to open file: " + path.string());
