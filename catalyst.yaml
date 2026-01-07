@@ -3,7 +3,7 @@ meta:
 manifest:
   name: cbe
   type: BINARY
-  version: 0.0.1
+  version: 0.1.0
   description: Your Description Goes Here
   provides: ""
   tooling:

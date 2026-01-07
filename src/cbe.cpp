@@ -2,13 +2,13 @@
 #include "cbe/executor.hpp"
 #include "cbe/parser.hpp"
 
+#include <charconv>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <print>
 #include <string>
 #include <vector>
-#include <charconv>
 
 void print_help() {
     std::println("Usage: cbe [options]");
@@ -24,7 +24,7 @@ void print_help() {
 }
 
 void print_version() {
-    std::println("cbe 0.0.1");
+    std::println("cbe {}", CATALYST_PROJ_VER);
 }
 
 int main(const int argc, const char *const *argv) {
@@ -67,13 +67,13 @@ int main(const int argc, const char *const *argv) {
         } else if (arg == "-j" || arg == "--jobs") {
             if (i + 1 < argc) {
                 size_t jobs = 0;
-                auto res = std::from_chars(argv[i+1], argv[i+1] + strlen(argv[i+1]), jobs);
+                auto res = std::from_chars(argv[i + 1], argv[i + 1] + strlen(argv[i + 1]), jobs);
                 if (res.ec == std::errc()) {
                     config.jobs = jobs;
                     i++;
                 } else {
-                     std::println(std::cerr, "Invalid job count: {}", argv[i+1]);
-                     return 1;
+                    std::println(std::cerr, "Invalid job count: {}", argv[i + 1]);
+                    return 1;
                 }
             } else {
                 std::println(std::cerr, "Missing argument for {}", arg);
