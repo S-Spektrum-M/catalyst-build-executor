@@ -279,7 +279,6 @@ Result<void> Executor::execute() {
 
                 static constexpr auto ARGS_VEC_INIT_SZ = 40;
                 std::vector<std::string> args;
-                std::filesystem::path rsp_cleanup_path;
                 args.reserve(ARGS_VEC_INIT_SZ);
                 auto add_parts = [&args](const auto &parts) {
                     args.reserve(args.size() + parts.size());
@@ -308,18 +307,21 @@ Result<void> Executor::execute() {
                     args.push_back(std::string(step.output));
                 } else if (step.tool == "ld") {
                     add_parts(cxx_vec);
-                    constexpr auto INPUT_SZ = 50;
-                    if (inputs.size() > INPUT_SZ) {
-                        rsp_cleanup_path = std::filesystem::path(step.output).replace_extension(".rsp");
-                        if (std::filesystem::exists(rsp_cleanup_path) && is_newer(rsp_cleanup_path, config.build_file)) {
-                            // skip
-                        } else {
-                            std::ofstream rsp_file(rsp_cleanup_path);
-                            for (const auto &input : inputs) {
-                                rsp_file << input << '\n';
-                            }
+                    static constexpr auto TUNABLE__INPUT_SZ = 50;
+                    std::filesystem::path rsp_path = std::filesystem::path(step.output).replace_extension(".rsp");
+                    if (std::filesystem::exists(rsp_path) && is_newer(rsp_path, config.build_file)) {
+                        args.push_back(std::string("@") + rsp_path.string());
+                    } else if (inputs.size() > TUNABLE__INPUT_SZ) {
+                        std::string rsp_content;
+                        constexpr auto TUNABLE__rsp_path_estimate = 100;
+                        rsp_content.reserve(inputs.size() * TUNABLE__rsp_path_estimate);
+                        for (const auto &input : inputs) {
+                            rsp_content += input;
+                            rsp_content += '\n';
                         }
-                        args.push_back(std::string("@") + rsp_cleanup_path.string());
+                        std::ofstream rsp_file(rsp_path);
+                        rsp_file.write(rsp_content.data(), rsp_content.size());
+                        args.push_back(std::string("@") + rsp_path.string());
                     } else {
                         for (const auto &in : inputs)
                             args.emplace_back(in);
