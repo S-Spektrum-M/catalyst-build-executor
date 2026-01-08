@@ -11,10 +11,13 @@ NUM_SOURCES = 1000
 HEADERS_PER_HEADER = 3
 HEADERS_PER_SOURCE = 10
 
+
 def ensure_dirs():
     os.makedirs(SRC_DIR, exist_ok=True)
     os.makedirs(INCLUDE_DIR, exist_ok=True)
-    # Build dir is usually created by the tool, but we might reference it
+    # Ninja usually requires the build directory to exist beforehand
+    os.makedirs(BUILD_DIR, exist_ok=True)
+
 
 def generate_headers():
     for i in range(NUM_HEADERS):
@@ -24,7 +27,6 @@ def generate_headers():
             f.write(f"// Header {i}\n")
 
             # Include previous headers to ensure DAG (no cycles)
-            # Pick 'HEADERS_PER_HEADER' random headers from 0 to i-1
             if i > 0:
                 potential_deps = list(range(i))
                 num_deps = min(len(potential_deps), HEADERS_PER_HEADER)
@@ -33,6 +35,7 @@ def generate_headers():
                     f.write(f"#include \"header_{dep}.hpp\"\n")
 
             f.write(f"\ninline int func_{i}() {{ return {i}; }}\n")
+
 
 def generate_sources():
     source_files = []
@@ -44,7 +47,8 @@ def generate_sources():
             f.write(f"// Source {i}\n")
 
             # Include random headers
-            deps = random.sample(range(NUM_HEADERS), min(NUM_HEADERS, HEADERS_PER_SOURCE))
+            deps = random.sample(range(NUM_HEADERS), min(
+                NUM_HEADERS, HEADERS_PER_SOURCE))
             for dep in deps:
                 f.write(f"#include \"header_{dep}.hpp\"\n")
 
@@ -59,7 +63,7 @@ def generate_sources():
     with open(os.path.join(SRC_DIR, "main.cpp"), "w") as f:
         f.write("#include <iostream>\n")
         for i in range(NUM_SOURCES):
-             f.write(f"int source_func_{i}();\n")
+            f.write(f"int source_func_{i}();\n")
 
         f.write("\nint main() {\n")
         f.write("    int total = 0;\n")
@@ -71,13 +75,14 @@ def generate_sources():
 
     return source_files
 
-def generate_manifest(source_files):
+
+def generate_catalyst_manifest(source_files):
     manifest_path = os.path.join(ROOT_DIR, "catalyst.build")
     with open(manifest_path, "w") as f:
         f.write("DEF|cc|clang\n")
         f.write("DEF|cxx|clang++\n")
         f.write("DEF|cflags|\n")
-        f.write("DEF|cxxflags|-std=c++20 -O0 -Iinclude\n") # O0 for speed of compilation during test
+        f.write("DEF|cxxflags|-std=c++20 -O0 -Iinclude\n")
         f.write("DEF|ldflags|\n")
         f.write("DEF|ldlibs|\n")
 
@@ -97,12 +102,57 @@ def generate_manifest(source_files):
         all_objs = ",".join(obj_files)
         f.write(f"ld|{all_objs}|build/heavy_app\n")
 
+
+def generate_ninja_manifest(source_files):
+    manifest_path = os.path.join(ROOT_DIR, "build.ninja")
+    with open(manifest_path, "w") as f:
+        # Preamble: Variables
+        f.write("cxx = clang++\n")
+        f.write("cxxflags = -std=c++20 -O0 -Iinclude\n")
+        f.write("ldflags = \n")
+        f.write("\n")
+
+        f.write("rule cxx\n")
+        f.write("  command = $cxx $cxxflags -MMD -MT $out -MF $out.d -c $in -o $out\n")
+        f.write("  description = CXX $out\n")
+        f.write("  depfile = $out.d\n")
+        f.write("  deps = gcc\n")
+        f.write("\n")
+
+        f.write("rule ld\n")
+        f.write("  command = $cxx $ldflags $in -o $out\n")
+        f.write("  description = LINK $out\n")
+        f.write("\n")
+
+        obj_files = []
+
+        for src in source_files:
+            obj_name = f"build/{src}.o"
+            obj_files.append(obj_name)
+            f.write(f"build {obj_name}: cxx src/{src}\n")
+
+        # Build Statement: Main
+        main_obj = "build/main.cpp.o"
+        obj_files.append(main_obj)
+        f.write(f"build {main_obj}: cxx src/main.cpp\n")
+
+        # Build Statement: Link
+        # Join objects with spaces for Ninja
+        all_objs = " ".join(obj_files)
+        f.write(f"\nbuild build/heavy_app: ld {all_objs}\n")
+
+
 if __name__ == "__main__":
     ensure_dirs()
     print("Generating headers...")
     generate_headers()
     print("Generating sources...")
     srcs = generate_sources()
-    print("Generating manifest...")
-    generate_manifest(srcs)
+
+    print("Generating catalyst manifest...")
+    generate_catalyst_manifest(srcs)
+
+    print("Generating ninja manifest...")
+    generate_ninja_manifest(srcs)
+
     print("Done.")
