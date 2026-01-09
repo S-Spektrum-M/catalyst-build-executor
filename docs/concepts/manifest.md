@@ -1,7 +1,8 @@
 # Build File Schema
 
-The `catalyst.build` manifest defines the build graphs and arguments for build rules.
-It uses a strict, pipe-delimited, 3-column format designed for efficient parsing.
+The `catalyst.build` manifest defines the build graphs and arguments for build
+rules. It uses a strict, pipe-delimited, 3-column format designed for efficient
+parsing.
 
 ## Structure
 
@@ -34,13 +35,14 @@ Build steps define the actions to transform input files into output files.
 
 Format: `<step_type>|<input_list>|<output_file>`
 
-*   `<step_type>`: Mnemonic for the tool to use (see Toolchain Mapping).
-*   `<input_list>`: Comma-separated list of input files.
-*   `<output_file>`: The path to the generated file.
+-   `<step_type>`: Mnemonic for the tool to use (see Toolchain Mapping).
+-   `<input_list>`: Comma-separated list of input files.
+-   `<output_file>`: The path to the generated file.
 
 #### Toolchain Mapping
 
-CBE maps specific step types to command templates. It strictly enforces certain behaviors (like dependency generation) by injecting flags.
+CBE maps specific step types to command templates. It strictly enforces certain
+behaviors (like dependency generation) by injecting flags.
 
 | Type | Description | Command Template (Approximation) |
 | ---- | ---- | ---- |
@@ -49,6 +51,23 @@ CBE maps specific step types to command templates. It strictly enforces certain 
 | `ld` | Binary Link | `$cxx $in -o $out $ldflags $ldlibs` |
 | `ar` | Static Link | `ar rcs $out $in` |
 | `sld` | Shared Link | `$cxx -shared $in -o $out` |
+
+
+#### Opaque Dependencies
+
+Inputs prefixed with `!` are treated as "opaque dependencies".
+These inputs are tracked for changes to trigger rebuilds but are not passed as
+arguments to the build tool.
+
+Example: `cxx|src/main.cpp,!resource.png|build/main.o`
+
+*   `src/main.cpp` is passed to the compiler.
+*   `resource.png` is not passed to the compiler, but modifying it will trigger
+a rebuild of `build/main.o`.
+
+This is useful for implicit dependencies (like configuration files or binary
+content) that affect the build output but aren't direct inputs to the command
+line.
 
 Important Notes(See [Implementation Details](../implementation/overview.md) for more info):
 
@@ -64,7 +83,7 @@ DEF|cflags|
 DEF|cxxflags|-std=c++20 -O3
 DEF|ldflags|
 DEF|ldlibs|
-cxx|src/main.cpp|build/main.o
+cxx|src/main.cpp,!resources/helpmessage.txt|build/main.o
 cxx|src/net.cpp|build/net.o
 ld|build/main.o,build/net.o|build/app
 ```
