@@ -3,6 +3,7 @@
 #include "cbe/builder.hpp"
 #include "cbe/process_exec.hpp"
 #include "cbe/utility.hpp"
+#include "nlohmann/detail/json_custom_base_class.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -69,6 +70,71 @@ Result<void> Executor::clean() {
             std::filesystem::remove(d_file);
         }
     }
+    return {};
+}
+
+[[clang::always_inline]]
+bool inline Executor::needs_rebuild(const BuildStep &step, StatCache &stat_cache) {
+    if (std::filesystem::exists(step.output)) {
+        auto output_modtime = std::filesystem::last_write_time(step.output);
+
+        if (stat_cache.changed_since(config.build_file, output_modtime)) {
+            return true;
+        }
+
+        if (step.depfile_inputs.has_value()) {
+            for (const auto &dep : *step.depfile_inputs) {
+                if (stat_cache.changed_since(std::filesystem::path(dep), output_modtime)) {
+                    return true;
+                }
+            }
+        }
+        if (step.opaque_inputs.has_value()) {
+            for (const auto &opaque : *step.opaque_inputs) {
+                if (stat_cache.changed_since(std::filesystem::path(opaque), output_modtime)) {
+                    return true;
+                }
+            }
+        }
+        // this is our way of making sure that the .d file isn't stale
+        for (const auto &input : step.parsed_inputs) {
+            if (stat_cache.changed_since(input, output_modtime)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return true;
+}
+
+Result<void> Executor::emit_graph() {
+    catalyst::BuildGraph build_graph = builder.emit_graph();
+    StatCache stat_cache;
+
+    std::cout << "digraph catalyst_build {\n";
+    std::cout << "  rankdir=LR;\n";
+    std::cout << "  node [shape=box, style=filled, fontname=\"Helvetica\"];\n";
+
+    for (size_t i = 0; i < build_graph.nodes().size(); ++i) {
+        const auto &node = build_graph.nodes()[i];
+        std::string color = "0.9 0.9 0.9"; // light gray for source files
+
+        if (node.step_id.has_value()) {
+            const auto &step = build_graph.steps()[*node.step_id];
+            if (needs_rebuild(step, stat_cache)) {
+                color = "green";
+            } else {
+                color = "white";
+            }
+        }
+
+        std::cout << "  n" << i << " [label=\"" << node.path << "\", fillcolor=\"" << color << "\"];\n";
+
+        for (size_t target_idx : node.out_edges) {
+            std::cout << "  n" << i << " -> n" << target_idx << ";\n";
+        }
+    }
+    std::cout << "}\n";
     return {};
 }
 
@@ -234,47 +300,7 @@ Result<void> Executor::execute() {
             const auto &step = build_graph.steps()[*node.step_id];
             const auto &inputs = step.parsed_inputs;
 
-            bool needs_rebuild = false;
-
-            if (std::filesystem::exists(step.output)) {
-                auto output_modtime = std::filesystem::last_write_time(step.output);
-
-                if (stat_cache.changed_since(config.build_file, output_modtime)) {
-                    needs_rebuild = true;
-                }
-
-                if (!needs_rebuild) {
-                    if (step.depfile_inputs.has_value()) {
-                        for (const auto &dep : *step.depfile_inputs) {
-                            if (stat_cache.changed_since(std::filesystem::path(dep), output_modtime)) {
-                                needs_rebuild = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!needs_rebuild && step.opaque_inputs.has_value()) {
-                        for (const auto &opaque : *step.opaque_inputs) {
-                            if (stat_cache.changed_since(std::filesystem::path(opaque), output_modtime)) {
-                                needs_rebuild = true;
-                                break;
-                            }
-                        }
-                    }
-                    // this is our way of making sure that the .d file isn't stale
-                    if (!needs_rebuild) {
-                        for (const auto &input : inputs) {
-                            if (stat_cache.changed_since(input, output_modtime)) {
-                                needs_rebuild = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-            } else {
-                needs_rebuild = true;
-            }
-
-            if (needs_rebuild) {
+            if (needs_rebuild(step, stat_cache)) {
                 {
                     std::lock_guard lock(cout_tty_mtx);
                     tty << "\033[1m" << std::flush;

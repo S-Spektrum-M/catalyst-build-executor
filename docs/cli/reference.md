@@ -20,3 +20,4 @@ cbe [options]
 | `--dry-run` | Print the commands that would be executed without actually running them. | N/A |
 | `--clean` | Remove all generated build artifacts defined in the manifest (including sidecar `.d` files). | N/A|
 | `--compdb` | Generate a `compile_commands.json` file for integration with clangd and other IDEs. | N/A |
+| `--graph` | Print a `.dot` file to stdout for build graph inspection. Files that need rebuild are colored green. | N/A |

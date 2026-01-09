@@ -8,7 +8,6 @@
 #include <iostream>
 #include <print>
 #include <string>
-#include <vector>
 
 void print_help() {
     std::println("Usage: cbe [options]");
@@ -21,6 +20,7 @@ void print_help() {
     std::println("  --dry-run        Print commands without executing them");
     std::println("  --clean          Remove build artifacts");
     std::println("  --compdb         Generate compile_commands.json");
+    std::println("  --graph          Generate DOT graph of build");
 }
 
 void print_version() {
@@ -30,6 +30,7 @@ void print_version() {
 int main(const int argc, const char *const *argv) {
     catalyst::ExecutorConfig config;
     bool compdb = false;
+    bool graph = false;
     std::string input_path = "catalyst.build";
     std::filesystem::path work_dir = ".";
 
@@ -64,6 +65,8 @@ int main(const int argc, const char *const *argv) {
             config.clean = true;
         } else if (arg == "--compdb") {
             compdb = true;
+        } else if (arg == "--graph") {
+            graph = true;
         } else if (arg == "-j" || arg == "--jobs") {
             if (i + 1 < argc) {
                 size_t jobs = 0;
@@ -116,6 +119,8 @@ int main(const int argc, const char *const *argv) {
 
     if (compdb) {
         auto _ = executor.emit_compdb();
+    } else if (graph) {
+        auto _ = executor.emit_graph();
     } else if (config.clean) {
         if (auto res = executor.clean(); !res) {
             std::println(std::cerr, "Clean failed: {}", res.error());

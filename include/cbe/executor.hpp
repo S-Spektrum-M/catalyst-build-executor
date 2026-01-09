@@ -41,8 +41,11 @@ public:
     Result<void> execute();
     Result<void> clean();
     Result<void> emit_compdb();
+    Result<void> emit_graph();
 
 private:
+    bool needs_rebuild(const BuildStep &step, StatCache &stat_cache);
+
     CBEBuilder builder;
     ExecutorConfig config;
     std::vector<std::jthread> pool;
