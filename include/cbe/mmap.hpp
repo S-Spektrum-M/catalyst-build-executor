@@ -17,8 +17,20 @@
 
 namespace catalyst {
 
+/**
+ * @brief cross-platform read-only memory mapped file wrapper.
+ *
+ * Provides access to file contents by mapping them into memory.
+ * Handles resource cleanup via RAII.
+ * Throws std::runtime_error on failure.
+ */
 class MappedFile {
 public:
+    /**
+     * @brief Opens and maps the specified file.
+     * @param path The path to the file.
+     * @throws std::runtime_error If opening, stating, or mapping fails.
+     */
     explicit MappedFile(const std::filesystem::path &path) {
 #ifdef _WIN32
         file_handle_ = CreateFileW(

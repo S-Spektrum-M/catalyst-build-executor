@@ -27,3 +27,7 @@ dependencies:
     triplet: x64-linux
     version: latest
     linkage: interface
+hooks:
+  post-generate:
+    - command: "command -v doxygen"
+    - command: "doxygen"              # if the above fails, this won't run

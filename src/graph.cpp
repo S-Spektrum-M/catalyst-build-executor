@@ -27,6 +27,16 @@ size_t BuildGraph::get_or_create_node(std::string_view path) {
     return id;
 }
 
+/**
+ * @brief Parses a Makefile-style dependency file (.d).
+ *
+ * This parser handles line continuations (\) and escaped spaces.
+ * It invokes the callback for each dependency found.
+ *
+ * @param graph The build graph (used to keep the memory mapped file alive).
+ * @param path The path to the dependency file.
+ * @param callback A callable that accepts a std::string_view for each dependency.
+ */
 void parse_depfile(BuildGraph &graph, const std::filesystem::path &path, auto callback) {
     if (!fs::exists(path)) {
         return;
