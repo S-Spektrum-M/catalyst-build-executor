@@ -57,3 +57,7 @@ A thread pool consumes tasks from a ready-queue. This queue is populated by a to
 
 ### Stat Caching
 CBE populates a stat cache to ensure that "popular" dependencies don't invoke unnecesary stat syscalls.
+
+## Work Estimation
+
+CBE supports prioritizing tasks based on estimated costs. See [Work Estimates](work_estimate.md) for details.

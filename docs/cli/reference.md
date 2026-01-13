@@ -16,6 +16,7 @@ cbe [options]
 | `-v, --version` | Show the version information and exit. | N/A|
 | `-d <dir>` | Change the working directory before performing any operations. | Current Working Directory |
 | `-f <file>` | Use `<file>` as the build manifest. | `catalyst.build`. |
+| `-e <estimate>` | Use `<estimate>` as the estimates file. | `catalyst.estimates`. |
 | `-j, --jobs <N>` | Set the number of parallel jobs. | Maximum number of available hardware threads (``nproc``). |
 | `--dry-run` | Print the commands that would be executed without actually running them. | N/A |
 | `--clean` | Remove all generated build artifacts defined in the manifest (including sidecar `.d` files). | N/A|
